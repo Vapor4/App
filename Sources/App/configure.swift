@@ -3,17 +3,17 @@ import FluentPostgresDriver
 import Vapor
 
 /// Called before your application initializes.
-func configure(_ s: inout Services) {
+func configure(_ app: Application) {
     /// Register providers first
-    s.provider(FluentProvider())
+    app.provider(FluentProvider())
 
     /// Register routes
-    s.extend(Routes.self) { r, c in
+    app.register(extension: Routes.self) { r, c in
         try routes(r, c)
     }
 
     /// Register middleware
-    s.register(MiddlewareConfiguration.self) { c in
+    app.register(MiddlewareConfiguration.self) { c in
         // Create _empty_ middleware config
         var middlewares = MiddlewareConfiguration()
         
@@ -21,24 +21,23 @@ func configure(_ s: inout Services) {
         /// middlewares.use(FileMiddleware.self)
         
         // Catches errors and converts to HTTP response
-        try middlewares.use(c.make(ErrorMiddleware.self))
+        middlewares.use(c.make(ErrorMiddleware.self))
         
         return middlewares
     }
 
-    s.register(Database.self) { c in
-        return try c.make(Databases.self).database(.psql)!
+    app.register(Database.self) { c in
+        return c.make(Databases.self).database(.psql)!
+    }
+    app.register(extension: Databases.self) { dbs, c in
+        dbs.postgres(configuration: c.make(), on: app.client.eventLoopGroup)
     }
 
-    s.extend(Databases.self) { dbs, c in
-        try dbs.postgres(config: c.make())
-    }
-
-    s.register(PostgresConfiguration.self) { c in
+    app.register(PostgresConfiguration.self) { c in
         return .init(hostname: "vapor", username: "vapor", password: "vapor")
     }
 
-    s.register(Migrations.self) { c in
+    app.register(Migrations.self) { c in
         var migrations = Migrations()
         migrations.add(CreateTodo(), to: .psql)
         return migrations
